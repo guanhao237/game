@@ -23,9 +23,13 @@
 
 **移动端**：点击底部方向按钮，或在屏幕上滑动。
 
-## 🚀 快速开始
+## 🌐 在线试玩
 
-直接双击 `snake.html` 在浏览器中打开即可游玩。
+👉 **[guanhao237.github.io/game](https://guanhao237.github.io/game/)**
+
+## 🚀 本地运行
+
+直接双击 `index.html` 在浏览器中打开即可。
 
 或者使用任意 HTTP 服务器：
 
@@ -37,13 +41,13 @@ python -m http.server 8080
 npx http-server
 ```
 
-然后访问 `http://localhost:8080/snake.html`。
+然后访问 `http://localhost:8080`。
 
 ## 📁 文件结构
 
 ```
 .
-├── snake.html    # 游戏主文件（HTML + CSS + JS）
+├── index.html    # 游戏主文件（HTML + CSS + JS）
 ├── .gitignore    # Git 忽略规则
 └── README.md     # 项目说明
 ```
