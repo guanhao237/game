@@ -111,8 +111,61 @@
         .game-overlay .sub-text {
             color: #a0a0b0;
             font-size: 14px;
-            margin-bottom: 20px;
+            margin-bottom: 8px;
         }
+
+        /* 难度选择 */
+        .mode-selector {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 16px;
+        }
+
+        .mode-btn {
+            padding: 8px 18px;
+            font-size: 13px;
+            font-weight: bold;
+            border: 2px solid #0f3460;
+            border-radius: 8px;
+            background: #16213e;
+            color: #a0a0b0;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            letter-spacing: 1px;
+        }
+
+        .mode-btn:hover {
+            border-color: #e94560;
+            color: #fff;
+        }
+
+        .mode-btn.selected {
+            background: #e94560;
+            border-color: #e94560;
+            color: #fff;
+            box-shadow: 0 0 12px rgba(233, 69, 96, 0.4);
+        }
+
+        .mode-label {
+            display: inline-block;
+            font-size: 11px;
+            color: #606080;
+            margin-bottom: 6px;
+            letter-spacing: 1px;
+        }
+
+        .current-mode {
+            display: inline-block;
+            padding: 3px 10px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: bold;
+            letter-spacing: 1px;
+        }
+
+        .current-mode.slow   { background: #1a6b3c; color: #5eff6e; }
+        .current-mode.medium { background: #6b5a1a; color: #f0c040; }
+        .current-mode.fast   { background: #6b1a2a; color: #ff6b81; }
 
         .btn {
             padding: 12px 32px;
@@ -204,14 +257,17 @@
                 display: grid;
             }
             .game-header {
-                gap: 20px;
+                gap: 8px;
             }
             .score-panel {
-                padding: 8px 16px;
-                min-width: 80px;
+                padding: 6px 10px;
+                min-width: 60px;
             }
             .score-value {
-                font-size: 24px;
+                font-size: 20px;
+            }
+            #modeDisplay {
+                font-size: 13px !important;
             }
         }
     </style>
@@ -219,6 +275,10 @@
 <body>
     <div class="game-wrapper">
         <div class="game-header">
+            <div class="score-panel">
+                <div class="score-label">模式</div>
+                <div class="score-value" style="font-size:16px;" id="modeDisplay">--</div>
+            </div>
             <div class="score-panel">
                 <div class="score-label">分数</div>
                 <div class="score-value" id="score">0</div>
@@ -233,7 +293,12 @@
             <canvas id="gameCanvas"></canvas>
             <div class="game-overlay active" id="overlay">
                 <h2 id="overlayTitle">🐍 贪吃蛇</h2>
-                <div class="sub-text" id="overlaySub">按空格键 或 点击开始</div>
+                <div class="sub-text" id="overlaySub">选择难度 开始游戏</div>
+                <div class="mode-selector" id="modeSelector">
+                    <button class="mode-btn" data-mode="slow">🐢 慢速</button>
+                    <button class="mode-btn selected" data-mode="medium">🐍 中速</button>
+                    <button class="mode-btn" data-mode="fast">⚡ 快速</button>
+                </div>
                 <button class="btn btn-start" id="btnStart">开始游戏</button>
             </div>
         </div>
@@ -259,17 +324,24 @@
             const ctx = canvas.getContext('2d');
             const scoreEl = document.getElementById('score');
             const bestScoreEl = document.getElementById('bestScore');
+            const modeDisplay = document.getElementById('modeDisplay');
             const overlay = document.getElementById('overlay');
             const overlayTitle = document.getElementById('overlayTitle');
             const overlaySub = document.getElementById('overlaySub');
             const btnStart = document.getElementById('btnStart');
+            const modeBtns = document.querySelectorAll('.mode-btn');
 
             // ───── 游戏配置 ─────
             const GRID_SIZE = 20;          // 每格像素
             const COLS = 25;               // 列数
             const ROWS = 21;               // 行数
-            const BASE_SPEED = 120;        // 基础间隔 (ms)
-            const SPEED_STEP = 2;          // 每吃一个食物加速 (ms)
+
+            // 难度模式速度配置
+            const MODE_CONFIG = {
+                slow:   { label: '慢速', cssClass: 'slow',   baseSpeed: 180, speedStep: 4 },
+                medium: { label: '中速', cssClass: 'medium', baseSpeed: 120, speedStep: 2 },
+                fast:   { label: '快速', cssClass: 'fast',   baseSpeed: 65,  speedStep: 1 },
+            };
 
             canvas.width = COLS * GRID_SIZE;
             canvas.height = ROWS * GRID_SIZE;
@@ -286,22 +358,32 @@
             let isPaused = false;
             let isGameOver = false;
             let particles = [];
+            let currentMode = 'medium';      // 默认中速
+            let currentConfig = MODE_CONFIG.medium;
 
-            // ───── 从 localStorage 加载最高分 ─────
-            try {
-                bestScore = parseInt(localStorage.getItem('snakeBestScore')) || 0;
-                bestScoreEl.textContent = bestScore;
-            } catch (e) { /* ignore */ }
+            // ───── 从 localStorage 加载最高分（按模式） ─────
+            function getStorageKey() {
+                return `snakeBestScore_${currentMode}`;
+            }
+
+            function loadBestScore() {
+                try {
+                    bestScore = parseInt(localStorage.getItem(getStorageKey())) || 0;
+                    bestScoreEl.textContent = bestScore;
+                } catch (e) { /* ignore */ }
+            }
 
             function saveBestScore() {
                 if (score > bestScore) {
                     bestScore = score;
                     bestScoreEl.textContent = bestScore;
                     try {
-                        localStorage.setItem('snakeBestScore', bestScore);
+                        localStorage.setItem(getStorageKey(), bestScore);
                     } catch (e) { /* ignore */ }
                 }
             }
+
+            loadBestScore();
 
             // ───── 初始化蛇 ─────
             function initSnake() {
@@ -425,7 +507,7 @@
             function restartLoop() {
                 if (gameLoop) clearInterval(gameLoop);
                 if (!isRunning) return;
-                const speed = Math.max(50, BASE_SPEED - Math.floor(score / 50) * SPEED_STEP);
+                const speed = Math.max(35, currentConfig.baseSpeed - Math.floor(score / 50) * currentConfig.speedStep);
                 gameLoop = setInterval(step, speed);
             }
 
@@ -553,6 +635,7 @@
 
             // ───── 开始 / 结束 ─────
             function startGame() {
+                currentConfig = MODE_CONFIG[currentMode];
                 initSnake();
                 score = 0;
                 scoreEl.textContent = score;
@@ -560,6 +643,9 @@
                 isRunning = true;
                 isPaused = false;
                 isGameOver = false;
+                modeDisplay.textContent = currentConfig.label;
+                modeDisplay.className = 'current-mode ' + currentConfig.cssClass;
+                loadBestScore();
                 spawnFood();
                 overlay.classList.remove('active');
                 restartLoop();
@@ -579,7 +665,7 @@
                 }
 
                 overlayTitle.textContent = '💀 游戏结束';
-                overlaySub.textContent = `得分: ${score}  |  最高分: ${bestScore}`;
+                overlaySub.textContent = `[${currentConfig.label}]  得分: ${score}  |  最高分: ${bestScore}`;
                 overlay.classList.add('active');
             }
 
@@ -591,7 +677,7 @@
                 saveBestScore();
 
                 overlayTitle.textContent = '🎉 恭喜通关!';
-                overlaySub.textContent = `满分: ${score}`;
+                overlaySub.textContent = `[${currentConfig.label}]  满分: ${score}`;
                 overlay.classList.add('active');
             }
 
@@ -663,6 +749,23 @@
 
             btnStart.addEventListener('click', startGame);
 
+            // ───── 难度选择 ─────
+            modeBtns.forEach(btn => {
+                btn.addEventListener('click', () => {
+                    if (isRunning && !isGameOver) return; // 游戏中不可切换
+                    modeBtns.forEach(b => b.classList.remove('selected'));
+                    btn.classList.add('selected');
+                    currentMode = btn.dataset.mode;
+                    loadBestScore();
+                    modeDisplay.textContent = MODE_CONFIG[currentMode].label;
+                    modeDisplay.className = 'current-mode ' + MODE_CONFIG[currentMode].cssClass;
+                    // 如果游戏结束状态，更新覆盖层最高分
+                    if (isGameOver) {
+                        overlaySub.textContent = `[${MODE_CONFIG[currentMode].label}]  得分: ${score}  |  最高分: ${bestScore}`;
+                    }
+                });
+            });
+
             // 点击画布也可开始
             overlay.addEventListener('click', (e) => {
                 if (e.target === overlay || e.target === overlayTitle || e.target === overlaySub) {
@@ -695,6 +798,8 @@
             });
 
             // ───── 初始绘制 ─────
+            modeDisplay.textContent = MODE_CONFIG[currentMode].label;
+            modeDisplay.className = 'current-mode ' + MODE_CONFIG[currentMode].cssClass;
             initSnake();
             draw();
         })();
